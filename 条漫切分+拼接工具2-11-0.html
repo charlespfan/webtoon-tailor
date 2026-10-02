@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>条漫切分 + 拼接工具</title>
+<style>
+  :root{
+    --bg:#f4f6f9; --card:#fff; --line:#e2e6ec; --accent:#2f6fed;
+    --text:#1f2530; --muted:#7b8494; --ok:#2f7a3e;
+    --warn:#c47f00; --warn-bg:#fffaf0; --warn-line:#f0b429; --warn-soft:#fdf1d6;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  header{padding:18px 24px;background:#fff;border-bottom:1px solid var(--line)}
+  h1{margin:0;font-size:18px}
+  .sub{color:var(--muted);font-size:13px;margin-top:5px}
+  main{max-width:1180px;margin:0 auto;padding:20px}
+
+  .panel{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+
+  .drop-zone{
+    border:2px dashed #c7d0dd;border-radius:12px;padding:24px 18px;text-align:center;
+    background:#fbfcfe;transition:.18s;cursor:pointer;user-select:none;
+  }
+  .drop-zone:hover{border-color:#a9b8cc;background:#f7faff}
+  .drop-zone.over{border-color:var(--accent);background:#eef4ff;border-style:solid}
+  .dz-title{font-size:15px;font-weight:600;margin-bottom:6px}
+  .dz-sub{font-size:12.5px;color:var(--muted)}
+  .dz-sub b{color:var(--accent)}
+
+  .row{display:flex;flex-wrap:wrap;gap:18px;align-items:flex-end;margin-top:16px}
+  .field{display:flex;flex-direction:column;gap:5px;font-size:13px;color:#555}
+  .field .hint{font-size:11px;color:#9aa3b2}
+  input[type=number],select{
+    padding:7px 10px;border:1px solid var(--line);border-radius:7px;font-size:13.5px;
+    background:#fff;color:var(--text);outline:none;
+  }
+  input[type=number]{width:118px}
+  input[type=number]:focus,select:focus{border-color:var(--accent)}
+  .checks{display:flex;gap:14px;align-items:center;font-size:13.5px;padding-bottom:7px}
+  .checks label{display:flex;gap:6px;align-items:center;cursor:pointer}
+
+  button{
+    cursor:pointer;border:none;border-radius:8px;padding:9px 20px;font-size:14px;
+    background:var(--accent);color:#fff;transition:.15s;font-family:inherit;
+  }
+  button:hover:not(:disabled){filter:brightness(1.08)}
+  button:disabled{opacity:.55;cursor:not-allowed}
+  button.ghost{background:#eef1f6;color:#333}
+  button.small{padding:5px 10px;font-size:12px;border-radius:6px}
+  button.icon{
+    padding:4px 9px;font-size:13px;border-radius:6px;background:#eef1f6;color:#444;
+    min-width:32px;
+  }
+
+  .dirlabel{font-size:12.5px;color:#4a5464;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .dirtag{
+    background:#e8f2e8;color:#2f7a3e;border-radius:6px;padding:3px 9px;font-size:12px;
+    max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .dirtag.none{background:#f0f2f6;color:#8b95a6}
+
+  .toolbar{
+    display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;
+    background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin-bottom:14px;
+  }
+  .tb-info{font-size:13.5px;color:#4a5464}
+  .tb-info b{color:var(--accent)}
+  .tb-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+  .tb-warn{
+    display:none;align-items:center;gap:6px;
+    font-size:12.5px;color:var(--warn);background:var(--warn-soft);
+    border-radius:999px;padding:4px 12px;white-space:nowrap;
+  }
+  .tb-warn.on{display:inline-flex}
+  .tb-warn b{color:#8a5a00}
+
+  #btnAutoLandscape{
+    background:var(--warn-soft);color:var(--warn);font-weight:600;
+  }
+  #btnAutoLandscape:hover:not(:disabled){background:#fbe4b3;filter:none}
+
+  #workspace{display:flex;flex-direction:column;gap:10px}
+  .empty{
+    background:#fff;border:1px solid var(--line);border-radius:12px;padding:44px 20px;
+    text-align:center;color:var(--muted);font-size:13.5px;
+  }
+  .block-card{
+    background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;
+    display:flex;gap:16px;align-items:center;
+    transition:background .15s,border-color .15s;
+  }
+  .block-thumb{
+    width:170px;height:220px;object-fit:contain;flex-shrink:0;
+    background:repeating-conic-gradient(#ececec 0 25%, #fff 0 50%) 0 0/14px 14px;
+    border-radius:8px;border:1px solid #eef1f5;
+    cursor:zoom-in;transition:box-shadow .15s,border-color .15s;
+  }
+  .block-thumb:hover{
+    border-color:var(--accent);
+    box-shadow:0 3px 14px rgba(47,111,237,.22);
+  }
+  .block-info{flex:1;min-width:0}
+  .block-name{
+    font-size:13.5px;font-weight:600;word-break:break-all;margin-bottom:4px;
+  }
+  .block-meta{font-size:12px;color:var(--muted);line-height:1.5}
+  .badge{
+    display:inline-block;font-size:10.5px;padding:1px 7px;border-radius:999px;
+    background:#eef4ff;color:var(--accent);margin-left:6px;vertical-align:1px;
+  }
+  .badge.merged{background:#e8f2e8;color:var(--ok)}
+  .badge.warn{background:var(--warn-soft);color:var(--warn);font-weight:600}
+
+  .block-card.landscape{
+    border-color:var(--warn-line);
+    background:var(--warn-bg);
+    box-shadow:inset 4px 0 0 var(--warn-line);
+  }
+  .block-card.landscape .block-thumb{
+    border-color:var(--warn-line);
+  }
+  .block-card.landscape .block-meta{
+    color:#9a7b3a;
+  }
+
+  .block-tools{
+    display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end;max-width:190px;
+  }
+  .block-tools button:disabled{opacity:.35}
+  .block-tools .del{background:#fdeaea;color:#c33}
+  .block-tools .del:hover{background:#f8d8d8}
+
+  .block-tools .join{background:#eef4ff;color:var(--accent);font-weight:600;letter-spacing:.5px}
+  .block-tools .join:hover:not(:disabled){background:#dde9ff}
+
+  .busy-tip{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
+    background:#222c3a;color:#fff;font-size:13px;padding:9px 20px;border-radius:999px;
+    box-shadow:0 6px 20px rgba(0,0,0,.18);z-index:99;display:none;
+  }
+  .busy-tip.on{display:block}
+
+  .lightbox{
+    position:fixed;inset:0;z-index:300;
+    background:rgba(14,19,27,.9);
+    display:none;align-items:center;justify-content:center;
+    padding:34px 24px 56px;
+    cursor:zoom-out;
+    animation:lbFade .14s ease-out;
+  }
+  .lightbox.on{display:flex}
+  @keyframes lbFade{from{opacity:0}to{opacity:1}}
+  .lightbox img{
+    max-width:94vw;
+    max-height:calc(100vh - 96px);
+    width:auto;height:auto;
+    object-fit:contain;
+    border-radius:6px;
+    background:#fff;
+    box-shadow:0 14px 52px rgba(0,0,0,.55);
+    cursor:zoom-out;
+  }
+  .lightbox-cap{
+    position:absolute;left:0;right:0;bottom:16px;
+    text-align:center;color:#dbe3ee;font-size:13px;
+    padding:0 70px;word-break:break-all;line-height:1.5;
+  }
+  .lightbox-cap .cap-warn{color:#ffcf70;font-weight:600}
+  .lightbox-close{
+    position:absolute;top:16px;right:20px;
+    width:40px;height:40px;border-radius:50%;
+    background:rgba(255,255,255,.14);color:#fff;
+    font-size:22px;line-height:1;
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;padding:0;
+  }
+  .lightbox-close:hover{background:rgba(255,255,255,.28);filter:none}
+</style>
+</head>
+<body>
+<header>
+  <h1>条漫切分 + 拼接工具</h1>
+  <div class="sub">
+    先「切分」把每张图按纯白/纯黑空白带拆成条；再「拼接」把相邻且边缘都是内容的条自动接回去。
+    每个块也可用「拼↑ / 拼↓」手动与上下块拼接，或用「自动拼接横向块」按空白行数决定合并方向。
+    <b>点击任意预览图可查看大图</b>（Esc 或点击空白处关闭）。
+    <b>高宽比小于 1</b>（宽 &gt; 高）的块会以橙色高亮标出。
+    全程本地处理，可转换 PNG / JPEG / WebP，质量 100%。
+  </div>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="drop-zone" id="dropZone">
+      <div class="dz-title">拖拽图片到这里</div>
+      <div class="dz-sub">或 <b>点击选择文件</b> · 支持多选 · 仅接受图片</div>
+      <input type="file" id="fileInput" accept="image/*" multiple hidden>
+    </div>
+
+    <div class="row">
+      <label class="field">
+        连续行数 N
+        <input type="number" id="n" value="10" min="1" step="1">
+        <span class="hint">连续 ≥N 行同色才算空白带</span>
+      </label>
+
+      <label class="field">
+        颜色容差 (0-255)
+        <input type="number" id="tol" value="0" min="0" max="255" step="1">
+        <span class="hint">0 = 严格纯白 / 纯黑</span>
+      </label>
+
+      <div class="checks">
+        <label><input type="checkbox" id="white" checked> 检测纯白</label>
+        <label><input type="checkbox" id="black" checked> 检测纯黑</label>
+      </div>
+
+      <label class="field">
+        输出格式
+        <select id="fmt">
+          <option value="keep">保持原格式</option>
+          <option value="image/png">PNG</option>
+          <option value="image/jpeg">JPEG</option>
+          <option value="image/webp">WebP</option>
+        </select>
+        <span class="hint">质量固定 100%</span>
+      </label>
+    </div>
+
+    <div class="row">
+      <button id="btnSplit">切分</button>
+      <button id="btnMerge" class="ghost">拼接</button>
+      <button id="btnClear" class="ghost">清空</button>
+    </div>
+
+    <div class="row">
+      <div class="field">
+        导出文件夹
+        <div class="dirlabel">
+          <button class="ghost small" id="pickDir" type="button">选择文件夹</button>
+          <span class="dirtag none" id="dirName">未指定（将使用浏览器下载）</span>
+          <button class="ghost small" id="clearDir" type="button" hidden>清除</button>
+        </div>
+        <span class="hint">需 Chrome / Edge 等支持 File System Access API 的浏览器</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="toolbar" id="resultBar" hidden>
+    <div class="tb-info">
+      工作区共 <b id="totalParts">0</b> 块
+      <span class="tb-warn" id="landscapeWarn">⚠ 其中 <b id="landscapeCount">0</b> 块高宽比 &lt; 1（宽 &gt; 高）</span>
+    </div>
+    <div class="tb-actions">
+      <button id="btnSort" class="ghost">按名称排序</button>
+      <button id="btnAutoLandscape">自动拼接横向块</button>
+      <button id="exportAll">一键全部导出</button>
+    </div>
+  </div>
+
+  <div id="workspace"></div>
+</main>
+
+<div class="lightbox" id="lightbox">
+  <button class="lightbox-close" id="lightboxClose" type="button" aria-label="关闭">×</button>
+  <img id="lightboxImg" alt="">
+  <div class="lightbox-cap" id="lightboxCap"></div>
+</div>
+
+<div class="busy-tip" id="busyTip"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var els = {
+    dropZone: document.getElementById('dropZone'),
+    fileInput: document.getElementById('fileInput'),
+    n: document.getElementById('n'),
+    tol: document.getElementById('tol'),
+    white: document.getElementById('white'),
+    black: document.getElementById('black'),
+    fmt: document.getElementById('fmt'),
+    btnSplit: document.getElementById('btnSplit'),
+    btnMerge: document.getElementById('btnMerge'),
+    btnClear: document.getElementById('btnClear'),
+    btnSort: document.getElementById('btnSort'),
+    btnAutoLandscape: document.getElementById('btnAutoLandscape'),
+    pickDir: document.getElementById('pickDir'),
+    clearDir: document.getElementById('clearDir'),
+    dirName: document.getElementById('dirName'),
+    resultBar: document.getElementById('resultBar'),
+    totalParts: document.getElementById('totalParts'),
+    landscapeWarn: document.getElementById('landscapeWarn'),
+    landscapeCount: document.getElementById('landscapeCount'),
+    exportAll: document.getElementById('exportAll'),
+    workspace: document.getElementById('workspace'),
+    busyTip: document.getElementById('busyTip'),
+    lightbox: document.getElementById('lightbox'),
+    lightboxImg: document.getElementById('lightboxImg'),
+    lightboxCap: document.getElementById('lightboxCap'),
+    lightboxClose: document.getElementById('lightboxClose')
+  };
+
+  var MIME_EXT = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' };
+
+  var state = {
+    blocks: [],
+    dirHandle: null,
+    nextId: 1,
+    busy: false
+  };
+
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  function clampInt(v, min, max, def) {
+    var x = parseInt(v, 10);
+    if (isNaN(x)) return def;
+    return Math.min(max, Math.max(min, x));
+  }
+
+  function naturalCompare(a, b) {
+    return String(a).localeCompare(String(b), undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    });
+  }
+
+  function aspectRatio(b) {
+    if (!b.width) return Infinity;
+    return b.height / b.width;
+  }
+
+  function isLandscape(b) {
+    return aspectRatio(b) < 1;
+  }
+
+  function ratioText(b) {
+    var r = aspectRatio(b);
+    if (!isFinite(r)) return '—';
+    return r.toFixed(3);
+  }
+
+  function setBusy(on, text) {
+    state.busy = !!on;
+    els.btnSplit.disabled = !!on;
+    els.btnMerge.disabled = !!on;
+    els.btnClear.disabled = !!on;
+    els.btnSort.disabled = !!on;
+    els.btnAutoLandscape.disabled = !!on;
+    els.exportAll.disabled = !!on;
+    els.busyTip.classList.toggle('on', !!on);
+    if (text) els.busyTip.textContent = text;
+  }
+
+  function setBusyText(text) { els.busyTip.textContent = text; }
+
+  function loadImage(src) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      img.onload = function () { resolve(img); };
+      img.onerror = function () { reject(new Error('图片加载失败')); };
+      img.src = src;
+    });
+  }
+
+  function downloadBlob(blob, filename) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+  }
+
+  /* ================= 大图预览 ================= */
+
+  function openLightbox(block) {
+    if (!block) return;
+    els.lightboxImg.src = block.url;
+    els.lightboxImg.alt = block.name;
+
+    var warn = isLandscape(block);
+    els.lightboxCap.innerHTML = '';
+    els.lightboxCap.appendChild(document.createTextNode(
+      block.name + '　·　' + block.width + ' × ' + block.height +
+      '　·　高宽比 ' + ratioText(block) +
+      (block.origin ? '　·　来自 ' + block.origin : '')
+    ));
+    if (warn) {
+      var s = document.createElement('span');
+      s.className = 'cap-warn';
+      s.textContent = '　⚠ 高宽比 < 1（宽 > 高）';
+      els.lightboxCap.appendChild(s);
+    }
+
+    els.lightbox.classList.add('on');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeLightbox() {
+    if (!els.lightbox.classList.contains('on')) return;
+    els.lightbox.classList.remove('on');
+    els.lightboxImg.removeAttribute('src');
+    document.body.style.overflow = '';
+  }
+
+  els.lightbox.addEventListener('click', function () { closeLightbox(); });
+  els.lightboxClose.addEventListener('click', function (e) {
+    e.stopPropagation();
+    closeLightbox();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' || e.key === 'Esc') closeLightbox();
+  });
+
+  /* ================= 像素判定 ================= */
+
+  // 1=纯白行, 2=纯黑行, 0=其它（内容）
+  function classifyRowPixels(data, offset, w, tol, checkWhite, checkBlack) {
+    var whiteMin = 255 - tol;
+    var blackMax = tol;
+    var isW = checkWhite;
+    var isB = checkBlack;
+
+    for (var x = 0; x < w; x++) {
+      var i = offset + x * 4;
+      var r = data[i], g = data[i + 1], b = data[i + 2];
+
+      if (isW && (r < whiteMin || g < whiteMin || b < whiteMin)) isW = false;
+      if (isB && (r > blackMax || g > blackMax || b > blackMax)) isB = false;
+      if (!isW && !isB) return 0;
+    }
+    return isW ? 1 : (isB ? 2 : 0);
+  }
+
+  function buildRowKinds(data, w, h, tol, checkWhite, checkBlack) {
+    var rowKind = new Uint8Array(h);
+    for (var y = 0; y < h; y++) {
+      rowKind[y] = classifyRowPixels(data, y * w * 4, w, tol, checkWhite, checkBlack);
+    }
+    return rowKind;
+  }
+
+  /* ================= 块构造 / 清理 ================= */
+
+  function makeBlock(image, url, name, type, origin, kind) {
+    return {
+      id: state.nextId++,
+      image: image,
+      url: url,
+      name: name,
+      type: type || 'image/png',
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      origin: origin || '',
+      kind: kind || 'original'
+    };
+  }
+
+  function disposeBlock(b) {
+    if (b && b.url) {
+      try { URL.revokeObjectURL(b.url); } catch (e) { /* ignore */ }
+    }
+  }
+
+  function disposeAll() {
+    state.blocks.forEach(disposeBlock);
+    state.blocks = [];
+  }
+
+  function canvasToBlock(canvas, name, type, origin, kind) {
+    return new Promise(function (resolve, reject) {
+      canvas.toBlob(function (blob) {
+        if (!blob) { reject(new Error('画布导出失败')); return; }
+        var url = URL.createObjectURL(blob);
+        var img = new Image();
+        img.onload = function () {
+          resolve(makeBlock(img, url, name, type, origin, kind));
+        };
+        img.onerror = function () {
+          URL.revokeObjectURL(url);
+          reject(new Error('切片加载失败'));
+        };
+        img.src = url;
+      }, 'image/png');
+    });
+  }
+
+  /* ================= 导入 ================= */
+
+  async function importFiles(list) {
+    var arr = Array.prototype.slice.call(list || []);
+    if (!arr.length) return;
+
+    arr = arr.filter(function (f) {
+      return f && f.type && f.type.indexOf('image/') === 0;
+    });
+    if (!arr.length) {
+      alert('没有成功导入图片（可能不是图片格式）。');
+      return;
+    }
+
+    arr.sort(function (a, b) { return naturalCompare(a.name, b.name); });
+
+    var okCount = 0;
+    for (var i = 0; i < arr.length; i++) {
+      var f = arr[i];
+      var url = URL.createObjectURL(f);
+      try {
+        var img = await loadImage(url);
+        var base = f.name.replace(/\.[^./\\]+$/, '');
+        state.blocks.push(makeBlock(img, url, base, f.type, f.name, 'original'));
+        okCount++;
+      } catch (e) {
+        URL.revokeObjectURL(url);
+      }
+    }
+
+    if (okCount === 0) {
+      alert('没有成功导入图片（可能不是图片格式）。');
+      return;
+    }
+    renderWorkspace();
+  }
+
+  /* ================= 切分 ================= */
+
+  async function splitOneBlock(block, opt) {
+    var img = block.image;
+    var w = img.naturalWidth, h = img.naturalHeight;
+    if (!w || !h) return [block];
+
+    var canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    var ctx = canvas.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return [block];
+
+    ctx.drawImage(img, 0, 0);
+
+    var pixels;
+    try {
+      pixels = ctx.getImageData(0, 0, w, h).data;
+    } catch (e) {
+      canvas.width = canvas.height = 0;
+      return [block];
+    }
+
+    var rowKind = buildRowKinds(pixels, w, h, opt.tol, opt.checkWhite, opt.checkBlack);
+    pixels = null;
+
+    var cuts = [0];
+    var y = 0;
+    while (y < h) {
+      var k = rowKind[y];
+      if (k === 0) { y++; continue; }
+      var j = y;
+      while (j < h && rowKind[j] === k) j++;
+      if (j - y >= opt.n) {
+        var mid = Math.floor((y + j) / 2);
+        if (mid > cuts[cuts.length - 1] && mid < h) cuts.push(mid);
+      }
+      y = j;
+    }
+    if (cuts[cuts.length - 1] !== h) cuts.push(h);
+
+    if (cuts.length <= 2) {
+      canvas.width = canvas.height = 0;
+      return [block];
+    }
+
+    var pieces = [];
+    for (var p = 0; p < cuts.length - 1; p++) {
+      var sy = cuts[p];
+      var ph = cuts[p + 1] - sy;
+      if (ph <= 0) continue;
+
+      var c = document.createElement('canvas');
+      c.width = w;
+      c.height = ph;
+      var cx = c.getContext('2d');
+      cx.drawImage(img, 0, sy, w, ph, 0, 0, w, ph);
+
+      var seq = String(pieces.length + 1).padStart(2, '0');
+      var pieceName = block.name + '_' + seq;
+      var nb = await canvasToBlock(c, pieceName, block.type, block.origin, 'piece');
+      pieces.push(nb);
+      c.width = c.height = 0;
+    }
+
+    canvas.width = canvas.height = 0;
+
+    if (pieces.length > 1) {
+      disposeBlock(block);
+      return pieces;
+    }
+    pieces.forEach(disposeBlock);
+    return [block];
+  }
+
+  async function runSplit() {
+    if (state.busy) return;
+    if (!state.blocks.length) { alert('请先导入图片'); return; }
+    if (!els.white.checked && !els.black.checked) {
+      alert('请至少勾选一种检测颜色（纯白 / 纯黑）');
+      return;
+    }
+
+    var opt = {
+      n: clampInt(els.n.value, 1, 100000, 10),
+      tol: clampInt(els.tol.value, 0, 255, 0),
+      checkWhite: els.white.checked,
+      checkBlack: els.black.checked
+    };
+
+    setBusy(true, '切分中…');
+
+    try {
+      var result = [];
+      for (var i = 0; i < state.blocks.length; i++) {
+        setBusyText('切分中 ' + (i + 1) + '/' + state.blocks.length + '…');
+        var pieces = await splitOneBlock(state.blocks[i], opt);
+        for (var j = 0; j < pieces.length; j++) result.push(pieces[j]);
+        await sleep(0);
+      }
+      state.blocks = result;
+      renderWorkspace();
+    } catch (e) {
+      alert('切分失败：' + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /* ================= 拼接 ================= */
+
+  function getEdgePixels(img, which, count) {
+    var w = img.naturalWidth, h = img.naturalHeight;
+    count = Math.max(1, Math.min(count, h));
+
+    var c = document.createElement('canvas');
+    c.width = w;
+    c.height = count;
+    var ctx = c.getContext('2d', { willReadFrequently: true });
+
+    if (which === 'top') {
+      ctx.drawImage(img, 0, 0, w, count, 0, 0, w, count);
+    } else {
+      ctx.drawImage(img, 0, h - count, w, count, 0, 0, w, count);
+    }
+
+    var data;
+    try {
+      data = ctx.getImageData(0, 0, w, count).data;
+    } catch (e) {
+      c.width = c.height = 0;
+      return null;
+    }
+    c.width = c.height = 0;
+    return { data: data, w: w, rows: count };
+  }
+
+  function isEdgeContent(img, which, opt, sampleRows) {
+    var edge = getEdgePixels(img, which, sampleRows);
+    if (!edge) return false;
+
+    var d = edge.data, w = edge.w, rows = edge.rows;
+    for (var r = 0; r < rows; r++) {
+      var kind = classifyRowPixels(d, r * w * 4, w, opt.tol, opt.checkWhite, opt.checkBlack);
+      if (kind === 0) return true;
+    }
+    return false;
+  }
+
+  async function mergeGroup(group) {
+    if (group.length === 1) return group[0];
+
+    var totalW = 0;
+    var totalH = 0;
+    for (var i = 0; i < group.length; i++) {
+      totalW = Math.max(totalW, group[i].width);
+      totalH += group[i].height;
+    }
+
+    var c = document.createElement('canvas');
+    c.width = totalW;
+    c.height = totalH;
+    var ctx = c.getContext('2d');
+    if (!ctx) throw new Error('无法创建拼接画布（可能尺寸过大）');
+
+    var y = 0;
+    for (var k = 0; k < group.length; k++) {
+      ctx.drawImage(group[k].image, 0, y);
+      y += group[k].height;
+    }
+
+    var baseName = group[0].name.replace(/_merged$/, '') + '_merged';
+    var nb = await canvasToBlock(c, baseName, group[0].type, group[0].origin, 'merged');
+    c.width = c.height = 0;
+
+    group.forEach(disposeBlock);
+    return nb;
+  }
+
+  async function mergeWithNeighbor(index, dir) {
+    if (state.busy) return;
+
+    var j = index + dir;
+    var list = state.blocks;
+    if (j < 0 || j >= list.length) return;
+
+    var a = list[index];
+    var b = list[j];
+    if (!a || !b) return;
+
+    var group = dir < 0 ? [b, a] : [a, b];
+    var at = Math.min(index, j);
+
+    setBusy(true, '拼接中…');
+    try {
+      var merged = await mergeGroup(group);
+      state.blocks.splice(at, 2, merged);
+      renderWorkspace();
+
+      var cards = els.workspace.querySelectorAll('.block-card');
+      if (cards[at] && cards[at].scrollIntoView) {
+        cards[at].scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    } catch (e) {
+      alert('拼接失败：' + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /* ===== 测量块顶部 / 底部的纯白/纯黑连续行数 ===== */
+  // 返回 { top, bot }：顶部连续空白行数、底部连续空白行数
+  function measureBlankMargins(block, opt) {
+    var img = block.image;
+    var w = img.naturalWidth, h = img.naturalHeight;
+    if (!w || !h) return { top: 0, bot: 0 };
+
+    var c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    var ctx = c.getContext('2d', { willReadFrequently: true });
+    if (!ctx) return { top: 0, bot: 0 };
+    ctx.drawImage(img, 0, 0);
+
+    var data;
+    try {
+      data = ctx.getImageData(0, 0, w, h).data;
+    } catch (e) {
+      c.width = c.height = 0;
+      return { top: 0, bot: 0 };
+    }
+
+    // 顶部连续空白行
+    var top = 0;
+    for (var y = 0; y < h; y++) {
+      var k1 = classifyRowPixels(data, y * w * 4, w, opt.tol, opt.checkWhite, opt.checkBlack);
+      if (k1 === 0) break;
+      top++;
+    }
+
+    // 底部连续空白行
+    var bot = 0;
+    for (var y2 = h - 1; y2 >= 0; y2--) {
+      var k2 = classifyRowPixels(data, y2 * w * 4, w, opt.tol, opt.checkWhite, opt.checkBlack);
+      if (k2 === 0) break;
+      bot++;
+    }
+
+    c.width = c.height = 0;
+    return { top: top, bot: bot };
+  }
+
+  /* ---- 自动拼接：按上下空白行数决定合并方向 ----
+     规则：
+       · 对每个高宽比 < 1 的块，测量它顶部与底部的纯白/纯黑连续行数；
+       · 若「上方行数 ≥ 下方行数」→ 向下合并（与它下方那个块拼接）；
+       · 否则 → 向上合并（与它上方那个块拼接）；
+       · 若某一方向没有相邻块可拼，则改用另一方向；
+       · 反复扫描，直到没有可合并的横向块为止（不留孤立块）。 */
+  async function autoMergeLandscape() {
+    if (state.busy) return;
+    if (state.blocks.length < 2) {
+      alert('至少需要 2 块内容才能拼接');
+      return;
+    }
+
+    var opt = {
+      tol: clampInt(els.tol.value, 0, 255, 0),
+      checkWhite: els.white.checked,
+      checkBlack: els.black.checked
+    };
+
+    setBusy(true, '自动拼接横向块…');
+
+    try {
+      var mergedGroups = 0;
+      var safety = 0;
+      var lastMove = '';
+
+      // 每轮合并都会让块数 -1，所以循环必然终止；safety 只是保险
+      while (safety++ < 5000) {
+        var found = false;
+
+        for (var i = 0; i < state.blocks.length; i++) {
+          var b = state.blocks[i];
+          if (!isLandscape(b)) continue;
+
+          var m = measureBlankMargins(b, opt);
+
+          // 决定拼接方向
+          var dir = 0;  // -1 = 向上，1 = 向下
+          if (m.top >= m.bot) {
+            // 上方空白 ≥ 下方空白 → 向下合并
+            if (i < state.blocks.length - 1) dir = 1;
+            else if (i > 0) dir = -1;   // 已是最后一块，改向上
+          } else {
+            // 下方空白更多 → 向上合并
+            if (i > 0) dir = -1;
+            else if (i < state.blocks.length - 1) dir = 1;  // 已是第一块，改向下
+          }
+
+          if (dir === 0) continue;  // 只有一块时无法合并
+
+          var j = i + dir;
+          var group = dir < 0
+            ? [state.blocks[j], b]     // 上方块在上，本块在下
+            : [b, state.blocks[j]];    // 本块在上，下方块在下
+          var at = Math.min(i, j);
+
+          setBusyText('自动拼接第 ' + (mergedGroups + 1) + ' 组…');
+
+          var merged = await mergeGroup(group);
+          state.blocks.splice(at, 2, merged);
+
+          mergedGroups++;
+          lastMove = dir > 0 ? '向下' : '向上';
+          found = true;
+          break;  // 重新从左到右扫描
+        }
+
+        if (!found) break;
+        await sleep(0);
+      }
+
+      renderWorkspace();
+
+      var remainingFlat = state.blocks.filter(isLandscape).length;
+
+      if (mergedGroups === 0) {
+        alert('没有找到可以自动拼接的横向块。');
+      } else {
+        var msg = '✓ 已拼接 ' + mergedGroups + ' 组';
+        if (remainingFlat > 0) {
+          msg += '（仍有 ' + remainingFlat + ' 个横向块无法合并）';
+        }
+        setBusyText(msg);
+        await sleep(1400);
+      }
+      void lastMove;
+    } catch (e) {
+      alert('自动拼接失败：' + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runMerge() {
+    if (state.busy) return;
+    if (state.blocks.length < 2) {
+      alert('至少需要 2 块内容才能拼接');
+      return;
+    }
+
+    var opt = {
+      tol: clampInt(els.tol.value, 0, 255, 0),
+      checkWhite: els.white.checked,
+      checkBlack: els.black.checked
+    };
+
+    setBusy(true, '拼接中…');
+
+    try {
+      var blocks = state.blocks;
+      var n = blocks.length;
+
+      var topContent = new Array(n);
+      var botContent = new Array(n);
+      for (var i = 0; i < n; i++) {
+        setBusyText('分析边缘 ' + (i + 1) + '/' + n + '…');
+        topContent[i] = isEdgeContent(blocks[i].image, 'top', opt, 2);
+        botContent[i] = isEdgeContent(blocks[i].image, 'bottom', opt, 2);
+        await sleep(0);
+      }
+
+      var groups = [];
+      var cur = [blocks[0]];
+      for (var j = 1; j < n; j++) {
+        if (botContent[j - 1] && topContent[j]) {
+          cur.push(blocks[j]);
+        } else {
+          groups.push(cur);
+          cur = [blocks[j]];
+        }
+      }
+      groups.push(cur);
+
+      var result = [];
+      for (var g = 0; g < groups.length; g++) {
+        setBusyText('拼接中 ' + (g + 1) + '/' + groups.length + '…');
+        var merged = await mergeGroup(groups[g]);
+        result.push(merged);
+        await sleep(0);
+      }
+
+      state.blocks = result;
+      renderWorkspace();
+
+      var mergedCount = result.filter(function (b) { return b.kind === 'merged'; }).length;
+      if (mergedCount === 0) {
+        alert('没有相邻块的边缘同时为内容颜色，未发生拼接。');
+      }
+    } catch (e) {
+      alert('拼接失败：' + e.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /* ================= 工作区渲染 ================= */
+
+  function renderWorkspace() {
+    var list = state.blocks;
+    els.totalParts.textContent = list.length;
+    els.resultBar.hidden = list.length === 0;
+
+    var flatCount = 0;
+    for (var c = 0; c < list.length; c++) {
+      if (isLandscape(list[c])) flatCount++;
+    }
+    els.landscapeCount.textContent = flatCount;
+    els.landscapeWarn.classList.toggle('on', flatCount > 0);
+
+    els.workspace.innerHTML = '';
+
+    if (!list.length) {
+      var empty = document.createElement('div');
+      empty.className = 'empty';
+      empty.textContent = '工作区为空 — 拖入图片即可开始';
+      els.workspace.appendChild(empty);
+      return;
+    }
+
+    list.forEach(function (b, idx) {
+      var flat = isLandscape(b);
+
+      var card = document.createElement('div');
+      card.className = 'block-card' + (flat ? ' landscape' : '');
+      if (flat) {
+        card.title = '高宽比 ' + ratioText(b) + ' < 1（宽 > 高），请检查该块是否切分或拼接有误';
+      }
+
+      var thumb = document.createElement('img');
+      thumb.className = 'block-thumb';
+      thumb.src = b.url;
+      thumb.alt = b.name;
+      thumb.title = '点击查看大图';
+      thumb.loading = 'lazy';
+      thumb.addEventListener('click', function () { openLightbox(b); });
+
+      var info = document.createElement('div');
+      info.className = 'block-info';
+
+      var nameEl = document.createElement('div');
+      nameEl.className = 'block-name';
+      nameEl.textContent = b.name;
+      if (b.kind === 'piece') {
+        var bd = document.createElement('span');
+        bd.className = 'badge';
+        bd.textContent = '切片';
+        nameEl.appendChild(bd);
+      } else if (b.kind === 'merged') {
+        var bm = document.createElement('span');
+        bm.className = 'badge merged';
+        bm.textContent = '已拼接';
+        nameEl.appendChild(bm);
+      }
+      if (flat) {
+        var bw = document.createElement('span');
+        bw.className = 'badge warn';
+        bw.textContent = '⚠ 宽 > 高';
+        bw.title = '高宽比 ' + ratioText(b) + ' < 1';
+        nameEl.appendChild(bw);
+      }
+
+      var metaEl = document.createElement('div');
+      metaEl.className = 'block-meta';
+      metaEl.textContent = b.width + ' × ' + b.height +
+        ' ｜ 高宽比 ' + ratioText(b) +
+        (b.origin ? ' ｜ 来自 ' + b.origin : '');
+
+      info.appendChild(nameEl);
+      info.appendChild(metaEl);
+
+      var tools = document.createElement('div');
+      tools.className = 'block-tools';
+
+      var joinUp = document.createElement('button');
+      joinUp.className = 'icon join';
+      joinUp.type = 'button';
+      joinUp.textContent = '拼↑';
+      joinUp.title = '与上一块拼接（本块接在上一块下方）';
+      joinUp.disabled = idx === 0;
+      joinUp.addEventListener('click', function () { mergeWithNeighbor(idx, -1); });
+
+      var joinDown = document.createElement('button');
+      joinDown.className = 'icon join';
+      joinDown.type = 'button';
+      joinDown.textContent = '拼↓';
+      joinDown.title = '与下一块拼接（下一块接在本块下方）';
+      joinDown.disabled = idx === list.length - 1;
+      joinDown.addEventListener('click', function () { mergeWithNeighbor(idx, 1); });
+
+      var up = document.createElement('button');
+      up.className = 'icon';
+      up.type = 'button';
+      up.textContent = '↑';
+      up.title = '上移';
+      up.disabled = idx === 0;
+      up.addEventListener('click', function () { moveBlock(idx, -1); });
+
+      var down = document.createElement('button');
+      down.className = 'icon';
+      down.type = 'button';
+      down.textContent = '↓';
+      down.title = '下移';
+      down.disabled = idx === list.length - 1;
+      down.addEventListener('click', function () { moveBlock(idx, 1); });
+
+      var del = document.createElement('button');
+      del.className = 'icon del';
+      del.type = 'button';
+      del.textContent = '×';
+      del.title = '删除';
+      del.addEventListener('click', function () { removeBlock(idx); });
+
+      tools.appendChild(joinUp);
+      tools.appendChild(joinDown);
+      tools.appendChild(up);
+      tools.appendChild(down);
+      tools.appendChild(del);
+
+      card.appendChild(thumb);
+      card.appendChild(info);
+      card.appendChild(tools);
+      els.workspace.appendChild(card);
+    });
+  }
+
+  function moveBlock(index, delta) {
+    if (state.busy) return;
+    var t = index + delta;
+    if (t < 0 || t >= state.blocks.length) return;
+    var tmp = state.blocks[index];
+    state.blocks[index] = state.blocks[t];
+    state.blocks[t] = tmp;
+    renderWorkspace();
+  }
+
+  function removeBlock(index) {
+    if (state.busy) return;
+    var b = state.blocks[index];
+    if (!b) return;
+    if (!confirm('删除该块？')) return;
+    disposeBlock(b);
+    state.blocks.splice(index, 1);
+    renderWorkspace();
+  }
+
+  function sortBlocksByName() {
+    if (state.busy) return;
+    if (state.blocks.length < 2) return;
+    state.blocks.sort(function (a, b) { return naturalCompare(a.name, b.name); });
+    renderWorkspace();
+  }
+
+  /* ================= 导出文件夹 ================= */
+
+  async function ensurePermission(dirHandle) {
+    if (!dirHandle.queryPermission) return true;
+    var opts = { mode: 'readwrite' };
+    try {
+      if (await dirHandle.queryPermission(opts) === 'granted') return true;
+      if (await dirHandle.requestPermission(opts) === 'granted') return true;
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+
+  async function uniqueName(dirHandle, name) {
+    var m = name.match(/^(.*?)(\.[^.]*)?$/);
+    var base = m && m[1] ? m[1] : name;
+    var ext = m && m[2] ? m[2] : '';
+    var cand = name, i = 1;
+    for (;;) {
+      try {
+        await dirHandle.getFileHandle(cand);
+        cand = base + '(' + (++i) + ')' + ext;
+      } catch (e) {
+        if (e && e.name === 'NotFoundError') return cand;
+        throw e;
+      }
+    }
+  }
+
+  async function writeToDir(dirHandle, name, blob) {
+    var fname = await uniqueName(dirHandle, name);
+    var fh = await dirHandle.getFileHandle(fname, { create: true });
+    var wtr = await fh.createWritable();
+    await wtr.write(blob);
+    await wtr.close();
+    return fname;
+  }
+
+  els.pickDir.addEventListener('click', async function () {
+    if (!window.showDirectoryPicker) {
+      alert('当前浏览器不支持「指定导出文件夹」。\n请使用 Chrome / Edge 等浏览器，或直接使用一键全部导出（浏览器下载）。');
+      return;
+    }
+    try {
+      var dh = await window.showDirectoryPicker({ mode: 'readwrite' });
+      state.dirHandle = dh;
+      els.dirName.textContent = dh.name;
+      els.dirName.classList.remove('none');
+      els.clearDir.hidden = false;
+      updateExportLabel();
+    } catch (e) { /* 用户取消 */ }
+  });
+
+  els.clearDir.addEventListener('click', function () {
+    state.dirHandle = null;
+    els.dirName.textContent = '未指定（将使用浏览器下载）';
+    els.dirName.classList.add('none');
+    els.clearDir.hidden = true;
+    updateExportLabel();
+  });
+
+  function updateExportLabel() {
+    if (state.dirHandle) {
+      els.exportAll.textContent = '一键全部导出到「' + state.dirHandle.name + '」';
+    } else {
+      els.exportAll.textContent = '一键全部导出';
+    }
+  }
+
+  /* ================= 全部导出 ================= */
+
+  function resolveOutputMime(blockType, fmt) {
+    if (fmt === 'keep') {
+      if (MIME_EXT[blockType]) return blockType;
+      return 'image/png';
+    }
+    return fmt;
+  }
+
+  async function exportAllBlocks() {
+    var blocks = state.blocks;
+    if (!blocks.length) { alert('工作区为空'); return; }
+    if (state.busy) return;
+
+    var fmtVal = els.fmt.value;
+    var useDir = !!state.dirHandle;
+
+    if (useDir) {
+      var ok = await ensurePermission(state.dirHandle);
+      if (!ok) { alert('没有文件夹写入权限，请重新选择文件夹'); return; }
+    }
+
+    setBusy(true, '导出中…');
+
+    try {
+      for (var i = 0; i < blocks.length; i++) {
+        var b = blocks[i];
+        setBusyText('导出 ' + (i + 1) + '/' + blocks.length + '…');
+
+        var mime = resolveOutputMime(b.type, fmtVal);
+
+        var c = document.createElement('canvas');
+        c.width = b.width;
+        c.height = b.height;
+        var ctx = c.getContext('2d');
+
+        if (mime === 'image/jpeg') {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, b.width, b.height);
+        }
+        ctx.drawImage(b.image, 0, 0);
+
+        var blob = await new Promise(function (resolve) {
+          c.toBlob(function (out) {
+            if (out) { resolve(out); return; }
+            c.toBlob(function (out2) { resolve(out2); }, 'image/png');
+          }, mime, 1.0);
+        });
+
+        c.width = c.height = 0;
+        if (!blob) throw new Error('画布导出失败');
+
+        var realMime = blob.type || mime;
+        var ext = MIME_EXT[realMime] || 'png';
+        var fname = b.name + '.' + ext;
+
+        if (useDir) {
+          await writeToDir(state.dirHandle, fname, blob);
+        } else {
+          downloadBlob(blob, fname);
+          await sleep(320);
+        }
+
+        await sleep(0);
+      }
+
+      setBusyText('✓ 已导出 ' + blocks.length + ' 张');
+      await sleep(1200);
+
+    } catch (e) {
+      alert('导出失败：' + e.message);
+    } finally {
+      setBusy(false);
+      updateExportLabel();
+    }
+  }
+
+  /* ================= 清空 ================= */
+
+  function clearAll() {
+    if (!state.blocks.length) return;
+    if (!confirm('清空工作区？所有切分 / 拼接结果将被丢弃。')) return;
+    closeLightbox();
+    disposeAll();
+    renderWorkspace();
+  }
+
+  /* ================= 事件绑定 ================= */
+
+  ['dragover', 'drop'].forEach(function (t) {
+    document.addEventListener(t, function (e) { e.preventDefault(); });
+  });
+
+  els.dropZone.addEventListener('click', function () { els.fileInput.click(); });
+
+  els.dropZone.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    els.dropZone.classList.add('over');
+  });
+
+  els.dropZone.addEventListener('dragleave', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    els.dropZone.classList.remove('over');
+  });
+
+  els.dropZone.addEventListener('drop', async function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    els.dropZone.classList.remove('over');
+    if (state.busy) { alert('正在处理中，请稍候…'); return; }
+    if (e.dataTransfer && e.dataTransfer.files) {
+      setBusy(true, '导入中…');
+      try { await importFiles(e.dataTransfer.files); }
+      finally { setBusy(false); }
+    }
+  });
+
+  els.fileInput.addEventListener('change', async function () {
+    var files = els.fileInput.files;
+    els.fileInput.value = '';
+    if (!files || !files.length) return;
+    if (state.busy) { alert('正在处理中，请稍候…'); return; }
+    setBusy(true, '导入中…');
+    try { await importFiles(files); }
+    finally { setBusy(false); }
+  });
+
+  els.btnSplit.addEventListener('click', runSplit);
+  els.btnMerge.addEventListener('click', runMerge);
+  els.btnClear.addEventListener('click', clearAll);
+  els.btnSort.addEventListener('click', sortBlocksByName);
+  els.btnAutoLandscape.addEventListener('click', autoMergeLandscape);
+  els.exportAll.addEventListener('click', exportAllBlocks);
+
+  updateExportLabel();
+  renderWorkspace();
+})();
+</script>
+</body>
+</html>
