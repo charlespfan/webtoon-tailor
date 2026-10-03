@@ -200,7 +200,10 @@
     <div class="drop-zone" id="dropZone">
       <div class="dz-title">拖拽图片到这里</div>
       <div class="dz-sub">或 <b>点击选择文件</b> · 支持多选 · 仅接受图片</div>
-      <input type="file" id="fileInput" accept="image/*" multiple hidden>
+      <!-- 用绝对定位隐藏，兼容性比 hidden 属性更好（个别手机浏览器对 hidden input 触发点击不友好） -->
+      <input type="file" id="fileInput" accept="image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp,.heic,.heif"
+             multiple
+             style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0;pointer-events:none">
     </div>
 
     <div class="row">
@@ -381,6 +384,17 @@
     setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
   }
 
+  /* ================= 文件识别 ================= */
+  // 手机浏览器经常给出空 type 或 octet-stream，用扩展名兜底
+  function isImageFile(f) {
+    if (!f) return false;
+    if (f.type && f.type.indexOf('image/') === 0) return true;
+    if (!f.type || f.type === 'application/octet-stream') {
+      return /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i.test(f.name || '');
+    }
+    return false;
+  }
+
   /* ================= 大图预览 ================= */
 
   function openLightbox(block) {
@@ -424,7 +438,6 @@
 
   /* ================= 像素判定 ================= */
 
-  // 1=纯白行, 2=纯黑行, 0=其它（内容）
   function classifyRowPixels(data, offset, w, tol, checkWhite, checkBlack) {
     var whiteMin = 255 - tol;
     var blackMax = tol;
@@ -501,34 +514,66 @@
     var arr = Array.prototype.slice.call(list || []);
     if (!arr.length) return;
 
-    arr = arr.filter(function (f) {
-      return f && f.type && f.type.indexOf('image/') === 0;
-    });
-    if (!arr.length) {
-      alert('没有成功导入图片（可能不是图片格式）。');
+    // 放宽过滤：type 为空 / octet-stream 的用扩展名兜底
+    var candidates = arr.filter(isImageFile);
+    if (!candidates.length) {
+      var sample = arr[0] || {};
+      alert(
+        '没有找到可识别的图片文件。\n\n' +
+        '第 1 个文件：' + (sample.name || '(无名称)') + '\n' +
+        'MIME 类型：' + (sample.type || '(空)') + '\n\n' +
+        '请确认选择的是 JPG / PNG / WebP 等图片。\n' +
+        '（iPhone 的 HEIC 图片可能不被浏览器支持，可先在系统里转成 JPG）'
+      );
       return;
     }
 
-    arr.sort(function (a, b) { return naturalCompare(a.name, b.name); });
+    candidates.sort(function (a, b) { return naturalCompare(a.name, b.name); });
 
     var okCount = 0;
-    for (var i = 0; i < arr.length; i++) {
-      var f = arr[i];
+    var failNames = [];
+
+    for (var i = 0; i < candidates.length; i++) {
+      var f = candidates[i];
       var url = URL.createObjectURL(f);
       try {
         var img = await loadImage(url);
-        var base = f.name.replace(/\.[^./\\]+$/, '');
-        state.blocks.push(makeBlock(img, url, base, f.type, f.name, 'original'));
+        var base = (f.name || 'image').replace(/\.[^./\\]+$/, '');
+        // 保持原格式：空 type 时按扩展名推断
+        var type = f.type;
+        if (!type || type === 'application/octet-stream') {
+          var m = /\.(jpe?g|png|webp|gif|bmp)$/i.exec(f.name || '');
+          var e = m ? m[1].toLowerCase() : '';
+          if (e === 'jpg' || e === 'jpeg') type = 'image/jpeg';
+          else if (e === 'png') type = 'image/png';
+          else if (e === 'webp') type = 'image/webp';
+          else if (e === 'gif') type = 'image/gif';
+          else if (e === 'bmp') type = 'image/bmp';
+          else type = 'image/png';
+        }
+        state.blocks.push(makeBlock(img, url, base, type, f.name || '', 'original'));
         okCount++;
-      } catch (e) {
+      } catch (err) {
         URL.revokeObjectURL(url);
+        failNames.push(f.name || '(无名称)');
       }
+      await sleep(0);
     }
 
     if (okCount === 0) {
-      alert('没有成功导入图片（可能不是图片格式）。');
+      alert(
+        '图片读取失败，一张都没能加载。\n\n' +
+        (failNames.length
+          ? '失败文件（前 5 个）：\n' + failNames.slice(0, 5).join('\n') + '\n\n'
+          : '') +
+        '常见原因：\n' +
+        '· 图片格式浏览器不支持（如 iPhone 的 HEIC）\n' +
+        '· 图片过大，手机内存不足\n' +
+        '· 文件已损坏'
+      );
       return;
     }
+
     renderWorkspace();
   }
 
@@ -743,7 +788,6 @@
   }
 
   /* ===== 测量块顶部 / 底部的纯白/纯黑连续行数 ===== */
-  // 返回 { top, bot }：顶部连续空白行数、底部连续空白行数
   function measureBlankMargins(block, opt) {
     var img = block.image;
     var w = img.naturalWidth, h = img.naturalHeight;
@@ -764,7 +808,6 @@
       return { top: 0, bot: 0 };
     }
 
-    // 顶部连续空白行
     var top = 0;
     for (var y = 0; y < h; y++) {
       var k1 = classifyRowPixels(data, y * w * 4, w, opt.tol, opt.checkWhite, opt.checkBlack);
@@ -772,7 +815,6 @@
       top++;
     }
 
-    // 底部连续空白行
     var bot = 0;
     for (var y2 = h - 1; y2 >= 0; y2--) {
       var k2 = classifyRowPixels(data, y2 * w * 4, w, opt.tol, opt.checkWhite, opt.checkBlack);
@@ -784,13 +826,7 @@
     return { top: top, bot: bot };
   }
 
-  /* ---- 自动拼接：按上下空白行数决定合并方向 ----
-     规则：
-       · 对每个高宽比 < 1 的块，测量它顶部与底部的纯白/纯黑连续行数；
-       · 若「上方行数 ≥ 下方行数」→ 向下合并（与它下方那个块拼接）；
-       · 否则 → 向上合并（与它上方那个块拼接）；
-       · 若某一方向没有相邻块可拼，则改用另一方向；
-       · 反复扫描，直到没有可合并的横向块为止（不留孤立块）。 */
+  /* ---- 自动拼接：按上下空白行数决定合并方向，不留孤立块 ---- */
   async function autoMergeLandscape() {
     if (state.busy) return;
     if (state.blocks.length < 2) {
@@ -809,9 +845,7 @@
     try {
       var mergedGroups = 0;
       var safety = 0;
-      var lastMove = '';
 
-      // 每轮合并都会让块数 -1，所以循环必然终止；safety 只是保险
       while (safety++ < 5000) {
         var found = false;
 
@@ -821,24 +855,21 @@
 
           var m = measureBlankMargins(b, opt);
 
-          // 决定拼接方向
-          var dir = 0;  // -1 = 向上，1 = 向下
+          var dir = 0;
           if (m.top >= m.bot) {
-            // 上方空白 ≥ 下方空白 → 向下合并
             if (i < state.blocks.length - 1) dir = 1;
-            else if (i > 0) dir = -1;   // 已是最后一块，改向上
+            else if (i > 0) dir = -1;
           } else {
-            // 下方空白更多 → 向上合并
             if (i > 0) dir = -1;
-            else if (i < state.blocks.length - 1) dir = 1;  // 已是第一块，改向下
+            else if (i < state.blocks.length - 1) dir = 1;
           }
 
-          if (dir === 0) continue;  // 只有一块时无法合并
+          if (dir === 0) continue;
 
           var j = i + dir;
           var group = dir < 0
-            ? [state.blocks[j], b]     // 上方块在上，本块在下
-            : [b, state.blocks[j]];    // 本块在上，下方块在下
+            ? [state.blocks[j], b]
+            : [b, state.blocks[j]];
           var at = Math.min(i, j);
 
           setBusyText('自动拼接第 ' + (mergedGroups + 1) + ' 组…');
@@ -847,9 +878,8 @@
           state.blocks.splice(at, 2, merged);
 
           mergedGroups++;
-          lastMove = dir > 0 ? '向下' : '向上';
           found = true;
-          break;  // 重新从左到右扫描
+          break;
         }
 
         if (!found) break;
@@ -870,7 +900,6 @@
         setBusyText(msg);
         await sleep(1400);
       }
-      void lastMove;
     } catch (e) {
       alert('自动拼接失败：' + e.message);
     } finally {
@@ -978,7 +1007,8 @@
       thumb.src = b.url;
       thumb.alt = b.name;
       thumb.title = '点击查看大图';
-      thumb.loading = 'lazy';
+      // 手机端不懒加载，避免部分浏览器预览不刷新
+      thumb.loading = 'eager';
       thumb.addEventListener('click', function () { openLightbox(b); });
 
       var info = document.createElement('div');
@@ -1279,16 +1309,20 @@
     els.dropZone.classList.remove('over');
     if (state.busy) { alert('正在处理中，请稍候…'); return; }
     if (e.dataTransfer && e.dataTransfer.files) {
+      // 同样先做数组快照
+      var dropped = Array.prototype.slice.call(e.dataTransfer.files);
       setBusy(true, '导入中…');
-      try { await importFiles(e.dataTransfer.files); }
+      try { await importFiles(dropped); }
       finally { setBusy(false); }
     }
   });
 
   els.fileInput.addEventListener('change', async function () {
-    var files = els.fileInput.files;
+    // 关键修复：先拷贝文件数组，再清空 input.value
+    // 移动端 Chrome 在清空 value 后，之前的 FileList 可能已被清空
+    var files = Array.prototype.slice.call(els.fileInput.files || []);
     els.fileInput.value = '';
-    if (!files || !files.length) return;
+    if (!files.length) return;
     if (state.busy) { alert('正在处理中，请稍候…'); return; }
     setBusy(true, '导入中…');
     try { await importFiles(files); }
